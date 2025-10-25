@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Online Resume Builder</title>
+
+<!-- Simple styling -->
+<style>
+  :root{
+    --accent:#2b7a78;
+    --bg:#ffffff;
+    --text:#1b1b1b;
+  }
+  body{font-family:Inter, system-ui, Arial; margin:0; background:#f4f6f8; color:var(--text);}
+  .container{max-width:1200px;margin:28px auto;padding:18px;}
+  h1{margin:0 0 12px;font-size:20px}
+  .grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
+  .card{background:#fff;padding:14px;border-radius:8px;box-shadow:0 6px 18px rgba(20,20,20,0.05)}
+  label{display:block;font-size:13px;margin-top:8px}
+  input[type="text"], input[type="email"], textarea, select{width:100%; padding:8px;border-radius:6px;border:1px solid #d6dbe0;font-size:14px}
+  textarea{min-height:70px;resize:vertical}
+  .small-row{display:flex;gap:8px}
+  .btn{display:inline-block;padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:white;cursor:pointer;margin-top:10px}
+  .btn.secondary{background:#4d4d4d}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .preview-wrapper{padding:16px;display:flex;flex-direction:column;gap:12px}
+  .preview{border:1px solid #e5e7eb;padding:18px;border-radius:6px;background:var(--bg)}
+  /* Template styling (Classic & Modern) */
+  .resume-classic{font-family:Georgia, "Times New Roman", serif;color:var(--text)}
+  .resume-classic .name{font-size:24px;font-weight:700}
+  .resume-classic .section-title{font-weight:700;margin-top:10px;border-bottom:2px solid rgba(0,0,0,0.06);padding-bottom:6px}
+  .resume-modern{font-family:Inter, Arial, sans-serif;color:var(--text)}
+  .resume-modern .header{display:flex;gap:16px;align-items:center}
+  .resume-modern .name{font-size:22px;font-weight:800}
+  .tag{display:inline-block;padding:4px 8px;border-radius:20px;background:rgba(0,0,0,0.06);font-size:12px;margin-right:6px}
+  /* small responsive */
+  @media (max-width:920px){.grid{grid-template-columns:1fr;}.container{padding:12px}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Online Resume Builder — (Client-only)</h1>
+  <div class="grid">
+    <div class="card">
+      <form id="resumeForm">
+        <label>Full Name
+          <input type="text" name="name" id="name" placeholder="Jane Doe" value="Jane Doe">
+        </label>
+        <label>Title / Role
+          <input type="text" name="title" id="title" placeholder="Frontend Developer" value="Frontend Developer">
+        </label>
+        <label>Email
+          <input type="email" name="email" id="email" placeholder="you@example.com" value="jane.doe@example.com">
+        </label>
+        <label>Phone
+          <input type="text" name="phone" id="phone" placeholder="+1 555 555 5555" value="+1 555 555 5555">
+        </label>
+        <label>Location
+          <input type="text" name="location" id="location" placeholder="City, Country" value="Mumbai, India">
+        </label>
+
+        <label>Summary / Objective
+          <textarea id="summary" placeholder="Short profile summary...">Product-focused frontend developer with 3+ years of experience building responsive web apps.</textarea>
+        </label>
+
+        <label>Education (one per line, format: Degree | Institution | Year)
+          <textarea id="education">B.Sc. Computer Science | XYZ University | 2021
+Diploma in UI/UX | ABC Institute | 2019</textarea>
+        </label>
+
+        <label>Experience (one per line, format: Role | Company | Dates | Short description)
+          <textarea id="experience">Frontend Developer | Acme Corp | 2022–Present | Built SPA using React and Typescript
+Intern | WebWorks | 2021 | Assisted with UI redesign</textarea>
+        </label>
+
+        <label>Skills (comma separated)
+          <input type="text" id="skills" value="HTML, CSS, JavaScript, React, Git">
+        </label>
+
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+          <label style="flex:1">Template
+            <select id="template">
+              <option value="classic">Classic</option>
+              <option value="modern">Modern</option>
+            </select>
+          </label>
+
+          <label>Theme Color
+            <input type="color" id="themeColor" value="#2b7a78" title="Pick accent color">
+          </label>
+        </div>
+
+        <div class="controls" style="margin-top:12px">
+          <button type="button" class="btn" id="updatePreview">Update Preview</button>
+          <button type="button" class="btn" id="downloadPDF">Download PDF</button>
+          <button type="button" class="btn" id="downloadDOCX">Download DOCX</button>
+          <button type="button" class="btn secondary" id="resetSample">Load Sample</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card preview-wrapper">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>Live Preview</strong>
+        <small style="opacity:0.7">Choose template and theme, then download.</small>
+      </div>
+
+      <div id="preview" class="preview" contenteditable="false">
+        <!-- resume is injected here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+<script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
+
+<!-- Script: build, preview, download -->
+<script>
+(function(){
+  // helpers
+  function $(id){return document.getElementById(id)}
+  function toLines(str){ return str.split('\\n').map(s=>s.trim()).filter(s=>s) }
+
+  // build resume HTML based on form values and template
+  function buildResumeHTML(){
+    const name = $('name').value || '';
+    const title = $('title').value || '';
+    const email = $('email').value || '';
+    const phone = $('phone').value || '';
+    const location = $('location').value || '';
+    const summary = $('summary').value || '';
+    const education = toLines($('education').value || '');
+    const experience = toLines($('experience').value || '');
+    const skills = ($('skills').value || '').split(',').map(s=>s.trim()).filter(Boolean);
+    const template = $('template').value;
+    const accent = $('themeColor').value || '#2b7a78';
+
+    // set CSS variables for preview
+    document.documentElement.style.setProperty('--accent', accent);
+
+    // Compose sections
+    let eduHtml = education.map(line=>{
+      const parts = line.split('|').map(p=>p.trim());
+      const deg = parts[0]||'';
+      const inst = parts[1]||'';
+      const year = parts[2]||'';
+      return `<div><strong>${escapeHtml(deg)}</strong> · ${escapeHtml(inst)} <span style="float:right">${escapeHtml(year)}</span></div>`;
+    }).join('');
+
+    let expHtml = experience.map(line=>{
+      const parts = line.split('|').map(p=>p.trim());
+      const role = parts[0]||'';
+      const comp = parts[1]||'';
+      const dates = parts[2]||'';
+      const desc = parts[3]||'';
+      return `<div style="margin-bottom:8px">
+                <div style="display:flex;justify-content:space-between">
+                  <div><strong>${escapeHtml(role)}</strong> — ${escapeHtml(comp)}</div>
+                  <div style="opacity:0.8">${escapeHtml(dates)}</div>
+                </div>
+                <div style="font-size:13px;margin-top:4px">${escapeHtml(desc)}</div>
+              </div>`;
+    }).join('');
+
+    let skillsHtml = skills.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join(' ');
+
+    // Two templates: classic & modern
+    if(template === 'classic'){
+      return `
+      <div class="resume-classic" style="color:var(--text);--accent:${accent};width:100%;padding:18px">
+        <div class="name" style="color:var(--accent)">${escapeHtml(name)}</div>
+        <div style="margin-top:4px;font-style:italic">${escapeHtml(title)}</div>
+
+        <div style="margin-top:12px">
+          <strong>Contact</strong>
+          <div style="opacity:0.8">${escapeHtml(email)} · ${escapeHtml(phone)} · ${escapeHtml(location)}</div>
+        </div>
+
+        <div class="section-title">Profile</div>
+        <div>${escapeHtml(summary)}</div>
+
+        <div class="section-title">Experience</div>
+        <div>${expHtml}</div>
+
+        <div class="section-title">Education</div>
+        <div>${eduHtml}</div>
+
+        <div class="section-title">Skills</div>
+        <div style="margin-top:8px">${skillsHtml}</div>
+      </div>
+      `;
+    } else {
+      // modern
+      return `
+      <div class="resume-modern" style="width:100%;padding:18px;--accent:${accent}">
+        <div class="header" style="border-bottom:4px solid var(--accent);padding-bottom:10px">
+          <div style="flex:1">
+            <div class="name" style="color:var(--accent)">${escapeHtml(name)}</div>
+            <div style="opacity:0.8">${escapeHtml(title)}</div>
+          </div>
+          <div style="text-align:right; min-width:160px">
+            <div>${escapeHtml(email)}</div>
+            <div style="opacity:0.9">${escapeHtml(phone)}</div>
+            <div style="opacity:0.9">${escapeHtml(location)}</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 260px;gap:12px;margin-top:12px">
+          <div>
+            <div class="section-title">About</div>
+            <div style="margin-top:8px">${escapeHtml(summary)}</div>
+
+            <div class="section-title">Work</div>
+            <div style="margin-top:8px">${expHtml}</div>
+          </div>
+
+          <div>
+            <div class="section-title">Education</div>
+            <div style="margin-top:8px">${eduHtml}</div>
+
+            <div class="section-title" style="margin-top:12px">Skills</div>
+            <div style="margin-top:8px">${skillsHtml}</div>
+          </div>
+        </div>
+      </div>
+      `;
+    }
+  }
+
+  // render preview into the DOM
+  function renderPreview(){
+    const html = buildResumeHTML();
+    $('preview').innerHTML = html;
+
+    // small DOM tweaks to show accent color in tags/buttons inside preview
+    const styleTag = document.createElement('style');
+    styleTag.textContent = `
+      #preview .tag{background:rgba(0,0,0,0.06);padding:6px 10px;border-radius:14px;display:inline-block;margin:4px 4px 4px 0}
+      #preview .resume-modern .section-title, #preview .resume-classic .section-title {color:var(--accent)}
+    `;
+    // remove old injected style if present
+    const old = document.getElementById('preview-style');
+    if(old) old.remove();
+    styleTag.id = 'preview-style';
+    document.head.appendChild(styleTag);
+  }
+
+  // Protect from basic injection in this demo
+  function escapeHtml(s){
+    return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  }
+
+  // download PDF using html2pdf
+  function downloadPDF(){
+    const node = $('preview');
+    // ensure preview is up-to-date
+    renderPreview();
+
+    // html2pdf options
+    const opt = {
+      margin:       10,
+      filename:     `${$('name').value.replace(/\s+/g,'_') || 'resume'}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // clone the preview into a print-friendly node to ensure fonts & width
+    const clone = node.cloneNode(true);
+    const wrapper = document.createElement('div');
+    wrapper.style.width = '794px'; // roughly A4 width at 96dpi
+    wrapper.style.background = '#fff';
+    wrapper.appendChild(clone);
+    // call html2pdf
+    html2pdf().set(opt).from(wrapper).save();
+  }
+
+  // download DOCX using html-docx-js
+  function downloadDOCX(){
+    renderPreview(); // refresh
+    // Build a full HTML document (word needs <html><body> blocks)
+    const htmlContent = `
+      <html>
+        <head><meta charset="utf-8"/></head>
+        <body>
+          ${$('preview').innerHTML}
+        </body>
+      </html>
+    `;
+    // convert to .docx blob
+    try{
+      const converted = window.htmlDocx.asBlob(htmlContent, {orientation: 'portrait'});
+      const filename = `${$('name').value.replace(/\s+/g,'_') || 'resume'}.docx`;
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(converted);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }catch(e){
+      console.error(e);
+      alert('Sorry — DOCX generation failed in this browser. Try using Chrome or Firefox.');
+    }
+  }
+
+  // initial wiring
+  $('updatePreview').addEventListener('click', renderPreview);
+  $('downloadPDF').addEventListener('click', downloadPDF);
+  $('downloadDOCX').addEventListener('click', downloadDOCX);
+  $('themeColor').addEventListener('input', ()=>{ renderPreview(); });
+  $('template').addEventListener('change', renderPreview);
+
+  $('resetSample').addEventListener('click', ()=>{
+    // sample data
+    $('name').value = 'Jane Doe';
+    $('title').value = 'Frontend Developer';
+    $('email').value = 'jane.doe@example.com';
+    $('phone').value = '+91 98765 43210';
+    $('location').value = 'Mumbai, India';
+    $('summary').value = 'Frontend engineer with 3 years building responsive apps. Passionate about performance and accessible UIs.';
+    $('education').value = 'B.Sc Computer Science | XYZ University | 2021';
+    $('experience').value = 'Frontend Developer | Acme Corp | 2022–Present | Led redesign and migrated to React\nIntern | WebWorks | 2021 | UI improvements';
+    $('skills').value = 'HTML, CSS, JavaScript, React, Git, Tailwind';
+    $('template').value = 'modern';
+    $('themeColor').value = '#2b7a78';
+    renderPreview();
+  });
+
+  // render on load
+  renderPreview();
+
+})();
+</script>
+</body>
+</html>
